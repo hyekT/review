@@ -483,7 +483,7 @@ body{background-image:radial-gradient(var(--dot) 2px,transparent 2.2px),linear-g
 .tbox{display:grid;gap:8px;justify-items:center;text-align:center;border:3px solid var(--edge);border-radius:var(--rl);padding:18px;background:var(--surface2);margin:14px 0 6px}
 .tbox h3{margin:0;font-size:19.5px}
 .tcoderow{display:flex;gap:8px;justify-content:center}
-.tcode{font:inherit;font-size:19px;width:8em;text-align:center;padding:8px;border:3px solid var(--edge);border-radius:12px;letter-spacing:.3em;background:var(--surface);color:var(--fg)}
+.tcode{font:inherit;font-size:19px;width:11em;text-align:center;padding:8px;border:3px solid var(--edge);border-radius:12px;letter-spacing:.1em;background:var(--surface);color:var(--fg)}
 .tmsg{min-height:1.3em;margin:0;font-weight:700;color:var(--inkd)}
 .tbox .btnrow{justify-content:center;flex-wrap:wrap}
 .tside{display:block;margin-top:12px}
@@ -657,7 +657,7 @@ function show(v){
 
 
 /* ===== 지문 잠금: 앞 지문을 한 바퀴(어휘·빈칸·기억력) 돌면 다음 지문이 열려요 ===== */
-const TEACHER_CODE='6817';   // 교사 잠금 해제 번호 — 원하는 숫자로 바꿔서 쓰세요
+const TEACHER_CODE='unlock6817';   // 교사 잠금 해제 비밀번호 — 바꾸려면 따옴표 안 글자만 고치세요
 const lapDone=pid=>GAMES.every(g=>(S.plays[pid+'|'+g.id]||0)>0);
 function isUnlocked(i){
   if(i<=0)return true;
@@ -674,7 +674,7 @@ function teacherBox(pid,onClose){
   box.append(el('h3','','🔑 선생님 잠금 관리'));
   const st=el('p','note',S.pref.unlockAll?'지금 이 기기는 모든 지문이 열려 있어요.':'지금은 앞 지문을 한 바퀴 돌아야 다음 지문이 열려요.');
   const row=el('div','tcoderow');
-  const inp=el('input','tcode');inp.type='password';inp.inputMode='numeric';inp.autocomplete='off';inp.placeholder='번호';inp.setAttribute('aria-label','교사 번호');
+  const inp=el('input','tcode');inp.type='password';inp.autocomplete='off';inp.autocapitalize='off';inp.spellcheck=false;inp.placeholder='비밀번호';inp.setAttribute('aria-label','교사 비밀번호');
   const ok=el('button','btn','확인');ok.type='button';
   const msg=el('p','tmsg');msg.setAttribute('role','status');
   row.append(inp,ok);
@@ -686,7 +686,7 @@ function teacherBox(pid,onClose){
   const close=el('button','linkbtn','닫기');close.type='button';close.onclick=onClose;
   const tryIt=()=>{
     if(inp.value.trim()===TEACHER_CODE){row.hidden=true;msg.textContent='확인됐어요. 이 기기에만 적용돼요.';acts.hidden=false;}
-    else{msg.textContent='번호가 맞지 않아요.';inp.value='';inp.focus();}
+    else{msg.textContent='비밀번호가 맞지 않아요.';inp.value='';inp.focus();}
   };
   ok.onclick=tryIt;inp.onkeydown=e=>{if(e.key==='Enter')tryIt();};
   box.append(st,row,msg,acts,close);
