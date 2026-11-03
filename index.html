@@ -461,6 +461,33 @@ body{background-image:radial-gradient(var(--dot) 2px,transparent 2.2px),linear-g
 /* 틀림 표시는 붉은 계열 유지 */
 .cmcard.bad .cmfront{background:#FBE6EA;box-shadow:0 0 0 4px #D98A9B inset}
 .door.miss{background:#E7A3B1}
+
+/* 지문 잠금 */
+.pitem.locked{border-style:dashed;background:repeating-linear-gradient(135deg,var(--surface) 0 10px,var(--surface2) 10px 20px)}
+.pitem.locked .ptitle,.pitem.locked .pno{color:var(--muted)}
+.pitem.locked[aria-current=true]{background:repeating-linear-gradient(135deg,var(--sel2) 0 10px,var(--surface2) 10px 20px);color:var(--fg)}
+.pitem .plock{font-size:13px;font-weight:700;color:var(--muted)}
+.pitem .plap{display:inline-block;margin-left:6px;background:var(--sel);color:var(--sel-fg);border:1.5px solid var(--edge);border-radius:999px;padding:0 7px;font-size:12px;font-weight:700}
+.lockbox{text-align:center;border:3px dashed var(--edge);border-radius:var(--rl);padding:22px 18px;background:var(--surface2);margin:14px 0 6px}
+.lockic{font-size:48px;line-height:1.1}
+.lockbox h3{font-size:21.5px;margin:6px 0}
+.lockbox p{color:var(--muted);margin:4px 0}
+.lockbox p b{color:var(--fg)}
+.lockreq{list-style:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0;margin:14px 0}
+.lockreq li{border:2px solid var(--line);border-radius:999px;padding:3px 12px;font-weight:700;font-size:14px;color:var(--muted);background:var(--surface)}
+.lockreq li.ok{border-color:var(--edge);background:var(--sel);color:var(--sel-fg)}
+.lockbox .btn.big{width:auto;padding-left:24px;padding-right:24px}
+.tiles.dim{opacity:.38;filter:grayscale(.7);pointer-events:none}
+.dimtext{color:var(--muted)}
+.linkbtn{background:none;border:0;color:var(--inkd);text-decoration:underline;font:inherit;font-size:14px;cursor:pointer;margin-top:10px;padding:4px}
+.tbox{display:grid;gap:8px;justify-items:center;text-align:center;border:3px solid var(--edge);border-radius:var(--rl);padding:18px;background:var(--surface2);margin:14px 0 6px}
+.tbox h3{margin:0;font-size:19.5px}
+.tcoderow{display:flex;gap:8px;justify-content:center}
+.tcode{font:inherit;font-size:19px;width:8em;text-align:center;padding:8px;border:3px solid var(--edge);border-radius:12px;letter-spacing:.3em;background:var(--surface);color:var(--fg)}
+.tmsg{min-height:1.3em;margin:0;font-weight:700;color:var(--inkd)}
+.tbox .btnrow{justify-content:center;flex-wrap:wrap}
+.tside{display:block;margin-top:12px}
+.unlockmsg{font-weight:700;color:var(--inkd)}
 </style>
 
 <div class="wrap">
@@ -592,6 +619,8 @@ function weightedPick(items,pid,key,n){
 }
 function record(pid,game,stars,score){
   const t=fmt(new Date());
+  const wasDone=lapDone(pid),pi0=PASSAGES.findIndex(x=>x.id===pid),nx=PASSAGES[pi0+1];
+  const wasOpen=nx?isUnlocked(pi0+1):true;
   if(!S.days.includes(t)){S.days.push(t);S.days=S.days.slice(-120);}
   const k=pid+'|'+game;
   S.plays[k]=(S.plays[k]||0)+1;
@@ -599,6 +628,7 @@ function record(pid,game,stars,score){
   S.log.push({t:t,pid:pid,game:game,stars:stars,score:score});
   S.log=S.log.slice(-60);
   save();renderBadge();
+  cur.newOpen=(!wasDone&&lapDone(pid)&&nx&&!wasOpen)?nx.id:null;
 }
 function streak(){
   const set=new Set(S.days),d=new Date();
@@ -625,6 +655,61 @@ function show(v){
   window.scrollTo(0,0);
 }
 
+
+/* ===== 지문 잠금: 앞 지문을 한 바퀴(어휘·빈칸·기억력) 돌면 다음 지문이 열려요 ===== */
+const TEACHER_CODE='6817';   // 교사 잠금 해제 번호 — 원하는 숫자로 바꿔서 쓰세요
+const lapDone=pid=>GAMES.every(g=>(S.plays[pid+'|'+g.id]||0)>0);
+function isUnlocked(i){
+  if(i<=0)return true;
+  if(S.pref.unlockAll)return true;
+  const p=PASSAGES[i];if(!p)return false;
+  if(S.unlocked&&S.unlocked[p.id])return true;
+  if(ALL.some(g=>(S.plays[p.id+'|'+g.id]||0)>0))return true;   // 이미 해 본 지문은 계속 열어 둠
+  return lapDone(PASSAGES[i-1].id);
+}
+const idxOf=pid=>PASSAGES.findIndex(x=>x.id===pid);
+function teacherBox(pid,onClose){
+  const i=idxOf(pid),locked=i>=0&&!isUnlocked(i);
+  const box=el('div','tbox');
+  box.append(el('h3','','🔑 선생님 잠금 관리'));
+  const st=el('p','note',S.pref.unlockAll?'지금 이 기기는 모든 지문이 열려 있어요.':'지금은 앞 지문을 한 바퀴 돌아야 다음 지문이 열려요.');
+  const row=el('div','tcoderow');
+  const inp=el('input','tcode');inp.type='password';inp.inputMode='numeric';inp.autocomplete='off';inp.placeholder='번호';inp.setAttribute('aria-label','교사 번호');
+  const ok=el('button','btn','확인');ok.type='button';
+  const msg=el('p','tmsg');msg.setAttribute('role','status');
+  row.append(inp,ok);
+  const acts=el('div','btnrow');acts.hidden=true;
+  const mk=(t,fn,ghost)=>{const b=el('button','btn'+(ghost?' ghost':''),t);b.type='button';b.onclick=fn;acts.append(b);};
+  if(locked)mk('🔓 이 지문만 열기',()=>{S.unlocked=S.unlocked||{};S.unlocked[pid]=true;save();onClose();});
+  if(!S.pref.unlockAll)mk('🔓 모든 지문 열기',()=>{S.pref.unlockAll=true;save();onClose();},locked);
+  mk('🔒 잠금 다시 켜기',()=>{S.pref.unlockAll=false;S.unlocked={};save();onClose();},true);
+  const close=el('button','linkbtn','닫기');close.type='button';close.onclick=onClose;
+  const tryIt=()=>{
+    if(inp.value.trim()===TEACHER_CODE){row.hidden=true;msg.textContent='확인됐어요. 이 기기에만 적용돼요.';acts.hidden=false;}
+    else{msg.textContent='번호가 맞지 않아요.';inp.value='';inp.focus();}
+  };
+  ok.onclick=tryIt;inp.onkeydown=e=>{if(e.key==='Enter')tryIt();};
+  box.append(st,row,msg,acts,close);
+  setTimeout(()=>inp.focus(),0);
+  return box;
+}
+function lockPanel(p,i,d){
+  const prev=PASSAGES[i-1];
+  const box=el('div','lockbox');
+  box.append(el('div','lockic','🔒'),el('h3','','아직 잠겨 있어요'));
+  const m=el('p','');m.append('지문 '+pad(i)+' ',el('b','','「'+prev.title+'」'),'을(를) 한 바퀴 돌면 열려요.');
+  box.append(m);
+  const ul=el('ul','lockreq');
+  GAMES.forEach(g=>{const done=(S.plays[prev.id+'|'+g.id]||0)>0;const li=el('li',done?'ok':'',(done?'✓ ':'○ ')+g.name);ul.append(li);});
+  box.append(ul);
+  const go=el('button','btn big','지문 '+pad(i)+' 하러 가기');go.type='button';
+  go.onclick=()=>{sel=prev.id;renderHome();};
+  const t=el('button','linkbtn','선생님 잠금 해제');t.type='button';
+  t.onclick=()=>{box.replaceWith(teacherBox(p.id,()=>renderHome()));};
+  box.append(go,el('br'),t);
+  d.append(box);
+}
+
 /* ===== 홈 ===== */
 let sel=PASSAGES[0]?PASSAGES[0].id:null;
 function renderHome(){
@@ -637,14 +722,30 @@ function renderHome(){
   }
   PASSAGES.forEach((p,i)=>{
     const b=el('button','pitem');b.type='button';
+    const open=isUnlocked(i);
+    if(!open)b.classList.add('locked');
     if(p.id===sel)b.setAttribute('aria-current','true');
-    b.append(el('span','pno','지문 '+pad(i+1)+(p.sample?' · 예시':'')),el('span','ptitle',p.title),el('span','pprog','★ '+starsOf(p.id)+' / '+ALL.length*3));
+    b.append(el('span','pno',(open?'':'🔒 ')+'지문 '+pad(i+1)+(p.sample?' · 예시':'')),el('span','ptitle',p.title));
+    if(open){const pr=el('span','pprog','★ '+starsOf(p.id)+' / '+ALL.length*3);if(lapDone(p.id))pr.append(el('span','plap','한 바퀴 ✓'));b.append(pr);}
+    else b.append(el('span','plock','앞 지문 한 바퀴 후 열려요'));
+    b.setAttribute('aria-label',(open?'':'잠김, ')+'지문 '+(i+1)+' '+p.title);
     b.onclick=()=>{sel=p.id;renderHome();};
     list.append(b);
   });
-  const p=P(sel),d=$('#pdetail'),vs=V(p);
+  const ts=el('button','linkbtn tside','🔑 선생님 잠금 관리');ts.type='button';
+  ts.onclick=()=>{const d=$('#pdetail');d.textContent='';d.append(teacherBox(sel,()=>renderHome()));};
+  list.append(ts);
+  if(!P(sel))sel=PASSAGES[0].id;
+  const p=P(sel),d=$('#pdetail'),vs=V(p),pi=idxOf(p.id),locked=!isUnlocked(pi);
   d.textContent='';
-  d.append(el('h2','dtitle',p.title),el('p','dmeta',p.source+' · 어휘 '+vs.length+'개 · 문장 '+sentencesOf(p).length+'개'));
+  d.append(el('h2','dtitle'+(locked?' dimtext':''),(locked?'🔒 ':'')+p.title),el('p','dmeta',p.source+' · 어휘 '+vs.length+'개 · 문장 '+sentencesOf(p).length+'개'));
+  if(locked){
+    lockPanel(p,pi,d);
+    const dim=el('div','tiles dim');dim.setAttribute('aria-hidden','true');
+    GAMES.forEach(g=>{const b=el('div','tile');b.append(el('span','tno',g.n));const tn=el('span','tname');tn.append(el('span','tic','🔒'),g.name);b.append(tn,el('span','tdesc',g.desc));dim.append(b);});
+    d.append(dim);
+    return;
+  }
   const det=el('details','read');
   det.append(el('summary','','지문과 어휘 보기'));
   const body=el('div','read-body'),pt=el('p','ptext'),dl=el('dl','vlist');
@@ -718,6 +819,11 @@ function resultCard(o){
   const gi=GAMES.findIndex(x=>x.id===cur.gid);
   const mk=(txt,fn,primary)=>{const b=el('button','btn'+(primary?'':' ghost'),txt);b.type='button';b.onclick=fn;row.append(b);return b;};
   let primaryDone=false;
+  if(cur.newOpen&&P(cur.newOpen)){
+    const np=P(cur.newOpen),nid=np.id;cur.newOpen=null;
+    c.insertBefore(el('p','rline unlockmsg','🔓 한 바퀴 완료! 다음 지문 「'+np.title+'」이(가) 열렸어요.'),c.children[2]||null);
+    mk('🔓 다음 지문 열기',()=>{sel=nid;show('home');},true);primaryDone=true;
+  }
   if(o.extra){mk(o.extra.label,o.extra.fn,true);primaryDone=true;}
   if(cur.lap&&gi<GAMES.length-1){const n=GAMES[gi+1];mk('다음: '+n.name,()=>startGame(cur.pid,n.id,true),!primaryDone);primaryDone=true;}
   else if(cur.lap){mk('한 바퀴 완료 · 홈으로',()=>show('home'),!primaryDone);primaryDone=true;}
@@ -728,6 +834,7 @@ function resultCard(o){
 }
 function startGame(pid,gid,lap){
   stopAll();
+  if(!isUnlocked(idxOf(pid))){sel=pid;show('home');return;}
   cur={pid:pid,gid:gid,lap:!!lap,stop:null};
   show('game');
   const p=P(pid),g=ALL.find(x=>x.id===gid),root=$('#stage');
