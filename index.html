@@ -437,6 +437,30 @@ body{background-image:radial-gradient(var(--dot) 2px,transparent 2.2px),linear-g
 
 .srhud{background:linear-gradient(#1E2B20,#273728)}
 .srfoot{background:#141D16}
+
+/* 타자 연습 */
+.tybar{height:10px;border:2px solid var(--edge);border-radius:999px;background:var(--surface);overflow:hidden;margin-bottom:12px}
+.tybar i{display:block;height:100%;width:0;background:var(--ink);transition:width .3s}
+.tybox{display:grid;gap:12px;margin-bottom:12px}
+.tyline{border:3px solid var(--line);border-radius:var(--r);padding:12px 16px;background:var(--surface);color:var(--muted)}
+.tyline small{display:block;font-size:12.5px;font-weight:700;letter-spacing:.04em;margin-bottom:6px}
+.tyline .tytext{font-size:18px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere}
+.tyline.off .tytext{font-size:16px}
+.tyline.on{border-color:var(--edge);background:var(--surface2);color:var(--fg);box-shadow:0 0 0 4px var(--mark) inset}
+.tyline.on small{color:var(--inkd)}
+.tyline.on .tytext{font-size:21.5px;font-weight:500;white-space:pre-wrap}
+.tytext .ok{color:var(--ok)}
+.tytext .bad{color:var(--pen);background:rgba(196,69,113,.18);border-radius:3px;text-decoration:underline}
+.tytext .pend{color:var(--inkd);text-decoration:underline}
+.tytext .cur{background:var(--mark);color:var(--mark-fg);border-radius:3px;box-shadow:inset 0 -3px 0 var(--inkd)}
+.tyin{width:100%;font:inherit;font-size:19.5px;padding:12px 14px;border:3px solid var(--edge);border-radius:12px;background:var(--surface);color:var(--fg)}
+.tyin:focus{outline:3px solid var(--inkd);outline-offset:2px}
+.tyrow{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.tyspd b{font-size:22px;color:var(--inkd)}
+.tiles.extra .tile:nth-child(3){--tc:#C7D9C4}
+/* 틀림 표시는 붉은 계열 유지 */
+.cmcard.bad .cmfront{background:#FBE6EA;box-shadow:0 0 0 4px #D98A9B inset}
+.door.miss{background:#E7A3B1}
 </style>
 
 <div class="wrap">
@@ -510,7 +534,8 @@ const GAMES=[
 ];
 const SR={id:'sr',n:0,ic:'🏃',name:'Sentence Runner',sub:'어순',desc:'뛰어서 알맞은 덩어리를 모아 문장 조립'};
 const CM={id:'cm',n:0,ic:'🃏',name:'카드 짝 맞추기',sub:'짝 찾기',desc:'영어 단어와 뜻 카드를 뒤집어 짝을 맞춰요'};
-const EXTRA=[SR,CM];
+const TY={id:'ty',n:0,ic:'⌨️',name:'타자 연습',sub:'타자',desc:'영어 문장이나 한글 해석을 보고 그대로 쳐요'};
+const EXTRA=[SR,CM,TY];
 const ALL=GAMES.concat(EXTRA);
 
 /* ===== 공통 도우미 ===== */
@@ -723,12 +748,142 @@ function startGame(pid,gid,lap){
     {v:1,label:'작은 판',sub:'6쌍 · 카드 12장'},
     {v:2,label:'중간 판',sub:'8쌍 · 카드 16장'},
     {v:3,label:'큰 판',sub:'10쌍 · 카드 20장'}],'cm',m=>{cur.stop=runCM(p,m);});
+  if(gid==='ty'){const hasKo=!!(p.trans&&p.trans.length);setup(root,'무엇을 칠까요?',[
+    {v:'en',label:'영어 문장 치기',sub:'영어 문장이 강조돼요. 해석은 아래에 함께 보여요.'}].concat(hasKo?[
+    {v:'ko',label:'한글 해석 치기',sub:'한글 해석이 강조돼요. 영어 문장도 함께 보여요.'}]:[]),'ty',m=>{cur.stop=runTY(p,m);});}
   if(gid==='mm')setup(root,'단계를 고르세요',[
     {v:1,label:'1단계',sub:'30초 동안 외우고 빈칸 5개'},
     {v:2,label:'2단계',sub:'20초 동안 외우고 빈칸 8개'},
     {v:3,label:'3단계',sub:'15초 동안 외우고 빈칸 12개'}],'mm',m=>{cur.stop=runMM(p,m);});
 }
 
+
+/* ===== 추가: 타자 연습 ===== */
+const tyNorm=s=>String(s||'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/\s*[—–]\s*/g,' - ').replace(/…/g,'...').replace(/\s+/g,' ').trim();
+// 한글은 자모 단위로 타수를 셈(겹모음·겹받침은 2타)
+function tyStrokes(str){
+  let n=0;
+  for(const ch of str){
+    const c=ch.charCodeAt(0)-0xAC00;
+    if(c>=0&&c<11172){
+      const jung=Math.floor(c%588/28),jong=c%28;
+      n+=1+([9,10,11,14,15,16,19].includes(jung)?2:1)+(jong===0?0:[3,5,6,9,10,11,12,13,14,15,18].includes(jong)?2:1);
+    }else n+=1;
+  }
+  return n;
+}
+function runTY(p,mode){
+  const root=$('#stage');root.textContent='';
+  const ens=sentencesOf(p).map(tyNorm),kos=(p.trans||[]).map(tyNorm);
+  let items=ens.map((en,i)=>({en:en,ko:kos[i]||''})).filter(x=>x.en);
+  if(mode==='ko')items=items.filter(x=>x.ko);
+  if(!items.length){root.append(el('p','note','이 지문에는 한글 해석이 없어서 한글 타자 연습을 할 수 없어요. 영어 문장으로 해 보세요.'));return function(){};}
+  root.insertAdjacentHTML('beforeend',
+    '<div class="hud"><span class="tyn"></span><span class="tyspd">⚡ <b>0</b> 타/분</span><span class="tyacc">정확도 100%</span></div>'+
+    '<div class="tybar"><i></i></div>'+
+    '<div class="tybox"><div class="tyline en"><small>ENGLISH</small><div class="tytext" lang="en"></div></div>'+
+    '<div class="tyline ko"><small>한글 해석</small><div class="tytext" lang="ko"></div></div></div>'+
+    '<input class="tyin" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
+    '<div class="tyrow"><span class="note">다 치면 자동으로 다음 문장으로 넘어가요. 틀린 채로 넘기려면 Enter.</span><button type="button" class="btn ghost tyskip">이 문장 건너뛰기</button></div>');
+  const nEl=$('.tyn',root),spdEl=$('.tyspd b',root),accEl=$('.tyacc',root),bar=$('.tybar i',root);
+  const enBox=$('.tyline.en',root),koBox=$('.tyline.ko',root),inp=$('.tyin',root);
+  const tgtBox=mode==='ko'?koBox:enBox,othBox=mode==='ko'?enBox:koBox;
+  tgtBox.classList.add('on');othBox.classList.add('off');
+  $('small',tgtBox).textContent=(mode==='ko'?'한글 해석':'ENGLISH')+' · ✍️ 이 문장을 쳐요';
+  inp.setAttribute('lang',mode==='ko'?'ko':'en');
+  inp.placeholder=mode==='ko'?'여기에 한글 해석을 그대로 쳐 보세요':'Type the English sentence here';
+  inp.addEventListener('paste',e=>e.preventDefault());
+  inp.addEventListener('drop',e=>e.preventDefault());
+  let idx=0,running=true,composing=false,t0=0,iv=0,to=0;
+  let totStrokes=0,totMs=0,totChars=0,totOk=0,skipped=0;
+  const per=[];
+  const target=()=>mode==='ko'?items[idx].ko:items[idx].en;
+  function stats(val){
+    const tg=target();let ok=0,okStr='';
+    for(let i=0;i<Math.min(val.length,tg.length);i++){if(val[i]===tg[i]){ok++;okStr+=tg[i];}}
+    return {ok:ok,strokes:tyStrokes(okStr)};
+  }
+  function paint(){
+    const tg=target(),val=inp.value,box=$('.tytext',tgtBox);
+    box.textContent='';
+    const frag=document.createDocumentFragment();
+    for(let i=0;i<tg.length;i++){
+      const s=el('span','',tg[i]);
+      if(i<val.length){
+        if(composing&&i===val.length-1)s.className='pend';
+        else s.className=val[i]===tg[i]?'ok':'bad';
+      }else if(i===val.length)s.className='cur';
+      frag.append(s);
+    }
+    box.append(frag);
+    if(val.length>tg.length){const x=el('span','bad extra',val.slice(tg.length));box.append(x);}
+  }
+  function live(){
+    if(!t0){spdEl.textContent=per.length?Math.round(totStrokes/(totMs/60000)):0;return;}
+    const ms=Date.now()-t0+totMs,st=stats(inp.value).strokes+totStrokes;
+    spdEl.textContent=ms>800?Math.round(st/(ms/60000)):0;
+  }
+  function accNow(){
+    const st=stats(inp.value),typed=Math.min(inp.value.length-(composing?1:0),target().length);
+    const a=(totOk+st.ok)/Math.max(1,totChars+typed);
+    accEl.textContent='정확도 '+Math.round(a*100)+'%';
+  }
+  function show(){
+    const it=items[idx];
+    nEl.textContent='문장 '+(idx+1)+' / '+items.length;
+    bar.style.width=(idx/items.length*100)+'%';
+    $('.tytext',othBox).textContent=(mode==='ko'?it.en:(it.ko||'(이 문장은 해석이 없어요)'));
+    inp.value='';t0=0;composing=false;paint();accNow();live();inp.focus();
+  }
+  function next(skip){
+    const tg=target(),val=inp.value;
+    if(skip){skipped++;}
+    else{
+      const st=stats(val),ms=t0?Date.now()-t0:0;
+      totStrokes+=st.strokes;totMs+=ms;totOk+=st.ok;totChars+=Math.max(tg.length,val.length);
+      per.push({spd:ms?Math.round(st.strokes/(ms/60000)):0,acc:st.ok/Math.max(1,tg.length,val.length)});
+    }
+    idx++;
+    if(idx>=items.length)finish();else show();
+  }
+  function check(){
+    if(!running)return;
+    if(!t0&&inp.value.length)t0=Date.now();
+    paint();accNow();
+    if(!composing&&inp.value===target())to=setTimeout(()=>next(false),180);
+  }
+  inp.addEventListener('compositionstart',()=>{composing=true;});
+  inp.addEventListener('compositionend',()=>{composing=false;check();});
+  inp.addEventListener('input',e=>{composing=!!e.isComposing;check();});
+  inp.addEventListener('keydown',e=>{
+    if(e.key!=='Enter'||e.isComposing||composing)return;
+    e.preventDefault();
+    if(inp.value.length>=Math.ceil(target().length*0.6))next(false);
+  });
+  $('.tyskip',root).onclick=()=>{if(running)next(true);};
+  iv=setInterval(live,300);
+  function finish(){
+    running=false;clearInterval(iv);
+    const spd=totMs?Math.round(totStrokes/(totMs/60000)):0;
+    const acc=totChars?totOk/totChars:0,accP=Math.round(acc*100);
+    const doneN=per.length;
+    const stars=!doneN?1:(accP>=97&&skipped===0?3:accP>=90?2:1);
+    S.tyBest=S.tyBest||{};
+    const bk=p.id+'|'+mode,prev=S.tyBest[bk]||0,isBest=doneN&&spd>prev;
+    if(isBest)S.tyBest[bk]=spd;
+    record(p.id,'ty',stars,(mode==='ko'?'한글 ':'영어 ')+spd+'타 · 정확도 '+accP+'%');
+    const sec=Math.round(totMs/1000);
+    root.textContent='';
+    root.append(resultCard({title:stars===3?'정확하고 빨라요!':stars===2?'잘했어요!':'끝까지 해냈어요!',stars:stars,
+      lines:[(mode==='ko'?'한글 해석':'영어 문장')+' · 평균 '+spd+'타/분'+(mode==='en'?' (약 '+Math.round(spd/5)+' WPM)':''),
+        '정확도 '+accP+'% · 걸린 시간 '+Math.floor(sec/60)+':'+pad(sec%60)+(skipped?' · 건너뛴 문장 '+skipped+'개':''),
+        isBest?'🎉 이 지문 최고 기록이에요!':(prev?'이 지문 최고 기록: '+prev+'타/분':'')].filter(Boolean),
+      p:p,again:()=>{stopAll();cur.stop=runTY(p,mode);},
+      extra:{label:mode==='ko'?'영어 문장으로 하기':'한글 해석으로 하기',fn:()=>{const m=mode==='ko'?'en':'ko';S.pref.ty=m;save();stopAll();cur.stop=runTY(p,m);}}}));
+  }
+  show();
+  return function(){running=false;clearInterval(iv);clearTimeout(to);};
+}
 
 /* ===== 추가: 카드 짝 맞추기 ===== */
 function runCM(p,level){
